@@ -1,6 +1,5 @@
 library(TMB)
 library(INLA)
-setwd("C:/Users/ahav488/Documents/GitHub/gmrf_1D")
 
 x <- seq(1,500,by=1)
 n.samp <- 100
@@ -15,6 +14,8 @@ Tau <- sqrt(gamma(0.5)/(4*pi*Kappa)) #sig2 = 1
 mesh.1d <- inla.mesh.1d(sample.x)
 spde.1d <- inla.spde2.matern(mesh.1d, alpha = 1)
 
+
+compile("gmrf_1D")
 dyn.load(dynlib("gmrf_1D"))
 Data <- list(Y_i = rep(0,n.samp),
              M0 = spde.1d$param.inla$M0,
