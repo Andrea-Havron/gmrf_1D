@@ -6,16 +6,15 @@ n.samp <- 100
 sample.x <- sort( sample( 2:(max(x)-1),n.samp ) )
 
 Lambda <- 3
-Range <- 30
+Range <- 200
 Kappa <- 2/Range #sqrt(8*nu)/phi, nu=0.5
-Tau <- sqrt(gamma(0.5)/(4*pi*Kappa)) #sig2 = 1
+Tau <- sqrt(gamma(0.5)/(sqrt(4*pi)*Kappa)) #nu = 0.5, alpha = 1, d = 1, sig2 = 1
 
 
 mesh.1d <- inla.mesh.1d(sample.x)
 spde.1d <- inla.spde2.matern(mesh.1d, alpha = 1)
 
-
-compile("gmrf_1D")
+compile("gmrf_1D.cpp")
 dyn.load(dynlib("gmrf_1D"))
 Data <- list(Y_i = rep(0,n.samp),
              M0 = spde.1d$param.inla$M0,
@@ -37,10 +36,8 @@ sdr <- sdreport(obj)
 sdr
 exp(opt$par[2:3])
 report <- obj$report()
-report$range
 plot(sim$Y_i, exp(report$eta))
 plot(sim$Y_i, rpois(n.samp, exp(report$eta)))
-
 
 
 #Confirm tmb calculation of Q matches INLA
@@ -51,7 +48,7 @@ sample.x <- sort( sample( 2:(max(x)-1),n.samp ) )
 Lambda <- 3
 Range <- 30
 Kappa <- 2/Range #sqrt(8*nu)/phi, nu=0.5
-Tau <- sqrt(gamma(0.5)/(4*pi*Kappa)) #sig2 = 1
+Tau <- sqrt(gamma(0.5)/(sqrt(4*pi)*Kappa)) #sig2 = 1
 
 
 mesh.1d <- inla.mesh.1d(sample.x)
