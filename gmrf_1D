@@ -1,0 +1,92 @@
+
+#include <TMB.hpp>
+
+// Space time
+template<class Type>
+Type objective_function<Type>::operator() ()
+{
+  using namespace density;
+  // Data
+  DATA_MATRIX( Y_sp );
+  DATA_INTEGER( n_f );
+  DATA_SPARSE_MATRIX( M0 );
+  DATA_SPARSE_MATRIX( M2 );
+  
+  // Parameters - same as lecture
+  PARAMETER_VECTOR( Loadings_vec );
+  PARAMETER_VECTOR( beta0 );
+  PARAMETER( ln_kappa ); 
+
+  // Random effects
+  PARAMETER_ARRAY( omega_sf ); //random process
+
+  // Objective funcction
+  int n_s = Y_sp.rows();
+  int n_p = Y_sp.cols();
+  vector<Type> jnll_comp(2);
+  jnll_comp.setZero();
+  // sig2 = 1; d = 1; nu = 0.5; alpha = nu + d/2 = 1
+  // tau2 = gamma(nu)/( gamma(alpha) * (4*pi)^(d/2) * kappa^(2*nu) * sig2 )
+  Type tau = exp( 0.5 * (lgamma(0.5) - 0.5 * log(4*M_PI) - ln_kappa ));
+  Type kappa = exp(ln_kappa);
+  Type range = 2/kappa; // range = sqrt(8*nu)/kappa
+
+ // Unpack loadings matrix - take loadings vec and build cholesky matrix (bookkeeping)
+  matrix<Type> Loadings_pf(n_p, n_f);
+  int Count = 0;
+  for(int f=0; f<n_f; f++){
+    for(int p=0; p<n_p; p++){
+      if(p>=f){
+        Loadings_pf(p,f) = Loadings_vec(Count);
+        Count++;
+      }else{
+        Loadings_pf(p,f) = 0.0;
+      }
+    }
+  }
+
+  SparseMatrix<Type> Q = pow(kappa,2) * M0 + M2; //from Lindgren et al. 2011 when alpha=1
+  //MVNORM calculates the negative log likelihood of a multivariate normal (why it is += instead of -=)
+  for(int f=0; f<n_f; f++){
+    jnll_comp(1) += SCALE( GMRF(Q), 1/tau)( omega_sf.col(f) );
+    SIMULATE{
+      vector<Type>omega(n_s);
+      GMRF(Q).simulate(omega);
+      omega_sf.col(f) = omega / tau;
+    }
+  }
+
+
+  // Probability of data conditional on random effects
+  matrix<Type>ln_mean(n_s,n_p);
+  for( int s=0; s<n_s; s++){
+    for( int p=0; p<n_p; p++){
+      ln_mean(s,p) = beta0(p);
+      for( int f=0; f<n_f; f++){
+        ln_mean(s,p) += omega_sf(s,f) * Loadings_pf(p,f);
+      }
+      jnll_comp(0) -= dpois( Y_sp(s,p), exp(ln_mean(s,p)), true ); //intercept + random effect
+      SIMULATE{
+        Y_sp(s,p) = rpois(exp(ln_mean(s,p)));
+      }
+  }}
+
+  // Reporting
+  Type jnll = jnll_comp.sum();
+  SIMULATE{
+    REPORT( omega_sf );
+    REPORT( Y_sp );
+  }
+  REPORT( jnll_comp );
+  REPORT( jnll );
+  REPORT( ln_mean );
+  REPORT( omega_sf );
+  REPORT( Loadings_pf );
+  REPORT( beta0 );
+  REPORT( kappa );
+  REPORT( range );
+  REPORT( Q );
+  REPORT( tau );
+
+  return jnll;
+}
